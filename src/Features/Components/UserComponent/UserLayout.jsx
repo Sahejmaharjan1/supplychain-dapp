@@ -8,12 +8,8 @@ const { Header, Content, Footer } = Layout;
 
 const MenuBar = [
   {
-    name: "Dashboard",
-    key: 1,
-  },
-  {
     name: "Check Product",
-    key: 2,
+    key: 1,
   },
 ];
 const UserLayout = () => {
@@ -25,9 +21,6 @@ const UserLayout = () => {
   const MainContent = () => {
     switch (routeSelected.name) {
       case MenuBar[0].name:
-        return <>dashbaord</>;
-
-      case MenuBar[1].name:
         return (
           <>
             <CheckProduct />

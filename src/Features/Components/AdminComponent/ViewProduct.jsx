@@ -1,84 +1,70 @@
-import React from "react";
-import { Table, Tag, Space } from "antd";
+import React, { useEffect, useState } from "react";
+import { Table, Tag, Space, Modal, Row, Col, Typography } from "antd";
+import { useWeb3Context } from "../../../Utils/Web3Context";
+import QRcode from "qrcode";
+import { Auth } from "aws-amplify";
 
-const productData = [
-  {
-    user: {
-      productId: "123",
-      name: "abce",
-      detail: "ab",
-      price: 23,
-      webiste: "abcc.com",
-    },
-  },
-];
-
-const data = [
-  {
-    key: "1",
-    name: "Rolex",
-    price: 32,
-    address: "New York No. 1 Lake Park",
-    tags: ["watch", "clothing"],
-  },
-  {
-    key: "2",
-    name: "Addidas",
-    price: 3200,
-    address: "London No. 1 Lake Park",
-    tags: ["shoes", "clothing"],
-  },
-  {
-    key: "3",
-    name: "Joe Black",
-    price: 32000,
-    address: "Sidney No. 1 Lake Park",
-    tags: ["cool", "black"],
-  },
-  {
-    key: "4",
-    name: "Rolex",
-    price: 32,
-    address: "New York No. 1 Lake Park",
-    tags: ["watch", "clothing"],
-  },
-  {
-    key: "5",
-    name: "Addidas",
-    price: 3200,
-    address: "London No. 1 Lake Park",
-    tags: ["shoes", "clothing"],
-  },
-  {
-    key: "6",
-    name: "Joe Black",
-    price: 32000,
-    address: "Sidney No. 1 Lake Park",
-    tags: ["cool", "black"],
-  },
-  {
-    key: "7",
-    name: "Rolex",
-    price: 32,
-    address: "New York No. 1 Lake Park",
-    tags: ["watch", "clothing"],
-  },
-  {
-    key: "8",
-    name: "Addidas",
-    price: 3200,
-    address: "London No. 1 Lake Park",
-    tags: ["shoes", "clothing"],
-  },
-  {
-    key: "9",
-    name: "Joe Black",
-    price: 32000,
-    address: "Sidney No. 1 Lake Park",
-    tags: ["cool", "black"],
-  },
-];
 export function ViewProduct({ allProductData, setAllProductData }) {
+  const [products, setProducts] = useState([]);
+  const { ercContract, currentAccount } = useWeb3Context();
+  const [productData, setProductData] = useState(null);
+  const [imageUrl, setImageUrl] = useState("");
+
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const showModal = () => {
+    setIsModalVisible(true);
+  };
+
+  const handleOk = () => {
+    setIsModalVisible(false);
+  };
+
+  const handleCancel = () => {
+    setIsModalVisible(false);
+  };
+  useEffect(() => {
+    const getAll = async () => {
+      const count = await ercContract.methods.items().call();
+      console.log("count", count);
+      for (let i = 0; i < count; i++) {
+        const val = await ercContract.methods.allProducts(i).call();
+        const user = await Auth.currentAuthenticatedUser();
+        if (
+          user?.signInUserSession?.idToken?.payload?.[
+            "custom:registeredName"
+          ] === val?.registeredName
+        ) {
+          console.log("inside", val);
+          setProducts((prev) => [
+            ...prev,
+            {
+              key: val.productId,
+              name: val.productName,
+              price: val.price,
+              manufactureAddress: val.manufactureAddress,
+              tags: val.tags.split(","),
+              address: val.address,
+              detail: val.description,
+              registeredName: val.registeredName,
+            },
+          ]);
+        }
+      }
+    };
+    getAll();
+  }, [currentAccount, ercContract.methods]);
+  console.log(products);
+  const generateQrCode = async (values, id) => {
+    try {
+      // const response = await QRcode.toDataURL(JSON.stringify(values));
+      const response = await QRcode.toDataURL(id);
+      setProductData(values);
+      setImageUrl(response);
+      showModal();
+    } catch (error) {
+      console.log(error);
+    }
+  };
   const columns = [
     {
       title: "Product Name",
@@ -102,7 +88,7 @@ export function ViewProduct({ allProductData, setAllProductData }) {
       dataIndex: "tags",
       render: (tags) => (
         <>
-          {tags.map((tag) => {
+          {tags?.map((tag) => {
             let color = tag.length > 5 ? "geekblue" : "green";
             if ((tag === "shoes", "clothing")) {
               color = "volcano";
@@ -126,9 +112,17 @@ export function ViewProduct({ allProductData, setAllProductData }) {
             prev.filter((item) => item.name !== text.name)
           );
         };
+        const onViewHandler = async () => {
+          conosole.log("view", record);
+          console.log("onViewHandler", text, record.key);
+          generateQrCode(record, record.key);
+        };
         return (
           <Space size='middle'>
-            <a>View {record.name}</a>
+            <div onClick={onViewHandler}>
+              <a>View {record.name}</a>
+            </div>
+
             <div onClick={onDeleteHandler}>
               <a>Delete</a>
             </div>
@@ -139,7 +133,58 @@ export function ViewProduct({ allProductData, setAllProductData }) {
   ];
   return (
     <div>
-      <Table columns={columns} dataSource={allProductData} />
+      <Table columns={columns} dataSource={products} />
+      <Modal
+        title='Product Detail'
+        visible={isModalVisible}
+        onOk={handleOk}
+        onCancel={handleCancel}
+      >
+        <Row>
+          <Col xs={12}>
+            {imageUrl ? (
+              <a href={imageUrl} download>
+                <img src={imageUrl} alt='img' />
+              </a>
+            ) : null}
+          </Col>
+          <Col xs={12}>
+            <Typography.Text>Product Id:{Date.now()}</Typography.Text>
+            <br />
+            <Typography.Text>Product Name:{productData?.name}</Typography.Text>
+            <br />
+            <Typography.Text>
+              Product Description:{productData?.detail}
+            </Typography.Text>
+            <br />
+            {productData?.price && (
+              <Typography.Text>
+                Product Price:{productData?.price} rupees
+              </Typography.Text>
+            )}
+            <br />
+            {productData?.tags && (
+              <Typography.Text>
+                Product Tags:
+                {productData?.tags?.map((item, index) => (
+                  <Typography.Text key={index.toString()}>
+                    {item} &nbsp;
+                  </Typography.Text>
+                ))}
+              </Typography.Text>
+            )}
+            <br />
+            {productData?.website && (
+              <Typography.Text>
+                Product Website:
+                <a href={productData?.website} target='_blank' rel='noreferrer'>
+                  {productData?.website}
+                </a>
+              </Typography.Text>
+            )}
+          </Col>
+        </Row>
+      </Modal>
     </div>
   );
 }

@@ -1,23 +1,15 @@
-import {
-  Form,
-  Input,
-  InputNumber,
-  Button,
-  Modal,
-  Typography,
-  Row,
-  Col,
-  Select,
-} from "antd";
+import { Form, Input, InputNumber, Button, Select } from "antd";
 import React, { useState } from "react";
 import QRcode from "qrcode";
-
+import Web3 from "web3";
+import { useWeb3Context } from "../../../Utils/Web3Context";
+import { ProductInfoModal } from "../CoreUI/ProductInfoModal/ProductInfoModal";
+import { Auth } from "aws-amplify";
 const layout = {
   labelCol: { span: 8 },
   wrapperCol: { span: 16 },
 };
 
-/* eslint-disable no-template-curly-in-string */
 const validateMessages = {
   required: "${label} is required!",
   types: {
@@ -28,38 +20,20 @@ const validateMessages = {
     range: "${label} must be between ${min} and ${max}",
   },
 };
-/* eslint-enable no-template-curly-in-string */
 
-const AddProduct = ({ setAllProductData, setValues }) => {
-  function objToString(obj) {
-    var str = "";
-    for (var p in obj) {
-      if (Object.prototype.hasOwnProperty.call(obj, p)) {
-        str += p + "::" + obj[p] + "\n";
-      }
-    }
-    return str;
-  }
-  const [imageUrl, setImageUrl] = useState("");
+const AddProduct = () => {
   const [productData, setProductData] = useState(null);
-  const [scanResultFile, setScanResultFile] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const { provider, ercContract, currentAccount } = useWeb3Context();
 
   const showModal = () => {
     setIsModalVisible(true);
   };
 
-  const handleOk = () => {
-    setIsModalVisible(false);
-  };
-
-  const handleCancel = () => {
-    setIsModalVisible(false);
-  };
-  const generateQrCode = async (values) => {
+  const generateQrCode = async (values, id) => {
     try {
-      const response = await QRcode.toDataURL(JSON.stringify(values));
-
+      const response = await QRcode.toDataURL(id);
       setProductData(values);
       setImageUrl(response);
       showModal(true);
@@ -67,12 +41,31 @@ const AddProduct = ({ setAllProductData, setValues }) => {
       console.log(error);
     }
   };
-  const onFinish = (values) => {
+  const onFinish = async (values) => {
     console.log(values);
-    generateQrCode(values);
-    setValues(values);
-    // setAllProductData((prev) => (!prev ? [values] : [...prev, values]));
-    // setAllProductData([values]);
+    const web3 = new Web3(provider);
+    web3.eth.getAccounts().then(async function (accounts) {
+      console.log("accounts testing ", accounts);
+      const user = await Auth.currentAuthenticatedUser();
+      ercContract.methods
+        .newItem(
+          values.name,
+          Date.now().toString(),
+          values.tags.toString(),
+          values.price,
+          values.manufactureAddress,
+          user?.signInUserSession?.idToken?.payload?.["custom:registeredName"],
+          values.detail
+        )
+        .send({ from: accounts[0], gas: 1000000 })
+        .then((receipt) => {
+          console.log("receipt", receipt.events.Added.returnValues[0]);
+          generateQrCode(values, receipt.events.Added.returnValues[0]);
+        })
+        .catch((e) => {
+          console.log("error", e);
+        });
+    });
   };
 
   return (
@@ -91,7 +84,7 @@ const AddProduct = ({ setAllProductData, setValues }) => {
           <Input />
         </Form.Item>
         <Form.Item
-          name={"address"}
+          name={"manufactureAddress"}
           label='Address'
           rules={[{ required: true }]}
         >
@@ -113,12 +106,7 @@ const AddProduct = ({ setAllProductData, setValues }) => {
           <InputNumber />
         </Form.Item>
         <Form.Item name={"tags"} label='Tags'>
-          <Select
-            mode='tags'
-            size='middle'
-            placeholder='Please select'
-            // className={styles.input}
-          />
+          <Select mode='tags' size='middle' placeholder='Please select' />
         </Form.Item>
         <Form.Item name={"website"} label='Website'>
           <Input />
@@ -129,6 +117,12 @@ const AddProduct = ({ setAllProductData, setValues }) => {
           </Button>
         </Form.Item>
       </Form>
+      <ProductInfoModal
+        isModalVisible={isModalVisible}
+        setIsModalVisible={setIsModalVisible}
+        productData={productData}
+        imageUrl={imageUrl}
+      />
     </>
   );
 };

@@ -9,6 +9,7 @@ import { Provider } from 'react-redux'
 import { PersistGate } from 'redux-persist/integration/react'
 import { Router } from 'next/dist/client/router';
 import { withAuthenticator } from '@aws-amplify/ui-react';
+import Web3Context from '../src/Utils/Web3Context';
 
 Amplify.configure({ ...awsconfig, ssr: true });
 NProgress.configure({ showSpinner: false });
@@ -24,7 +25,11 @@ Router.events.on('routeChangeError', () => {
 
 function MyApp({ Component, pageProps }) {
   return <Provider store={store}>
-    <PersistGate loading={null} persistor={persistedStore}><Component {...pageProps} /></PersistGate></Provider>
+    <PersistGate loading={null} persistor={persistedStore}>
+      <Web3Context>
+        <Component {...pageProps} />
+      </Web3Context>
+    </PersistGate></Provider>
 }
 
 export default withAuthenticator(MyApp)
